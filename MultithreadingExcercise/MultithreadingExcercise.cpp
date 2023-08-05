@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <thread>
 #include <Windows.h>
 
 #include <boost/thread.hpp>
@@ -17,7 +18,7 @@ boost::mutex mtxCout;
 boost::mutex mtxThreadCount;
 
 boost::condition_variable cvThreadCount;
-const int maxThreads{ 16 };
+int maxThreads{ 1 };
 int activeThreads{ 0 };
 
 void processFile(const fs::path& filePath, boost::atomic<int>& sum)
@@ -78,6 +79,11 @@ bool chooseDefaultFolder(std::string& path)
 
 int main(int argc, char* argv[])
 {
+    if (std::thread::hardware_concurrency())
+    {
+        maxThreads = std::thread::hardware_concurrency();
+    }
+
     //choose of the path
     std::string targetPath;
 
