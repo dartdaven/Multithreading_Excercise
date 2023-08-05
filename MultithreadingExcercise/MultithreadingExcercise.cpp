@@ -14,6 +14,11 @@ namespace fs = std::filesystem;
 
 boost::mutex mtxCerr;
 boost::mutex mtxCout;
+boost::mutex mtxThreadCount;
+
+boost::condition_variable cvThreadCount;
+const int maxThreads{ 16 };
+int activeThreads{ 0 };
 
 void processFile(const fs::path& filePath, boost::atomic<int>& sum)
 {
@@ -48,7 +53,9 @@ void processFile(const fs::path& filePath, boost::atomic<int>& sum)
     
     sum += number;
 
-    boost::this_thread::sleep_for(boost::chrono::seconds(1));
+    boost::lock_guard<boost::mutex> lock(mtxThreadCount);
+    --activeThreads;
+    cvThreadCount.notify_one();
 }
 
 bool chooseDefaultFolder(std::string& path)
@@ -122,6 +129,11 @@ int main(int argc, char* argv[])
     {
         if (fs::is_regular_file(entry)) 
         {
+            boost::unique_lock<boost::mutex> lock(mtxThreadCount);
+            cvThreadCount.wait(lock, []() {return activeThreads < maxThreads; });
+            ++activeThreads;
+            lock.unlock();
+
             threads.create_thread(boost::bind(&processFile, entry, std::ref(totalSum)));
         }
     }
