@@ -2,18 +2,20 @@
 #include <filesystem>
 #include <string>
 #include <vector>
-#include <thread>
 #include <fstream>
-#include <chrono>
-#include <mutex>
 #include <Windows.h>
+
+#include <boost/thread.hpp>
+#include <boost/atomic.hpp>
+#include <boost/chrono.hpp>
+#include <boost/bind/bind.hpp>
 
 namespace fs = std::filesystem;
 
-std::mutex mtxCerr;
-std::mutex mtxCout;
+boost::mutex mtxCerr;
+boost::mutex mtxCout;
 
-void processFile(const fs::path& filePath, int& sum, std::mutex& mtx)
+void processFile(const fs::path& filePath, boost::atomic<int>& sum)
 {
     std::ifstream file(filePath);
     
@@ -27,30 +29,26 @@ void processFile(const fs::path& filePath, int& sum, std::mutex& mtx)
         {
             number = std::stoi(fileContent);
 
-            std::lock_guard<std::mutex> lock(mtxCout);
+            boost::lock_guard<boost::mutex> lock(mtxCout);
             std::cout << filePath.filename().string() << ": " << number << std::endl;
         }
         catch (const std::exception& e)
         {
-            std::lock_guard<std::mutex> lock(mtxCerr);
+            boost::lock_guard<boost::mutex> lock(mtxCerr);
             std::cerr << "Wrong content in the file: " << filePath.string() << " with: " << e.what() << std::endl;
             return;
         }
     }
     else
     {
-        std::lock_guard<std::mutex> lock(mtxCerr);
+        boost::lock_guard<boost::mutex> lock(mtxCerr);
         std::cerr << "File " << filePath.string() << " is empty\n";
         return;
     }
     
-    //modifing outer variable
-    {
-        std::lock_guard<std::mutex> lock(mtx);
-        sum += number;
-    }
+    sum += number;
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    boost::this_thread::sleep_for(boost::chrono::seconds(1));
 }
 
 bool chooseDefaultFolder(std::string& path)
@@ -115,23 +113,20 @@ int main(int argc, char* argv[])
     }
 
     //multithreading part
-    std::vector<std::thread> threads;
+    boost::atomic<int> totalSum(0);
     
-    int totalSum{ 0 };
-    std::mutex mtxForSharedSum;
+    boost::thread_group threads;
+    
 
     for (const auto& entry : fs::directory_iterator(targetPath))
     {
         if (fs::is_regular_file(entry)) 
         {
-            threads.emplace_back(processFile, entry.path(), std::ref(totalSum), std::ref(mtxForSharedSum));
+            threads.create_thread(boost::bind(&processFile, entry, std::ref(totalSum)));
         }
     }
 
-    for (auto& thread : threads)
-    {
-        thread.join();
-    }
+    threads.join_all();
 
     std::cout << "The sum is " << totalSum << std::endl;
     
