@@ -1,9 +1,10 @@
 # Multithreading Exercise
 
-The objectives of this exercise were:
+The objectives of this exercise are:
 1. Learning the basics of multithreading,
 2. Experience connecting third-party libraries
 
+### Note
 To build the program on your computer, you need to connect the [boost library](https://www.boost.org/) to the solution.
 In order to test its operation, it is enough to have only MultithreadingExcercise.exe
 
